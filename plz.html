@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D WebGL Shapes</title>
+    <style>
+        canvas { border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <h1>Mina's and group 1</h1>
+    <p> Use sliders to control rotation and size and more.</p>
+
+    <label>Rotate X: <input type="range" id="rotateX" min="-180" max="180" step="1" value="0"></label>
+    <label>Rotate Y: <input type="range" id="rotateY" min="-180" max="180" step="1" value="0"></label>
+    <label>Size: <input type="range" id="sizeControl" min="0.1" max="0.5" step="0.05" value="0.2"></label>
+    <label>Shape: 
+        <select id="shapeControl">
+            <option value="cube">Cube</option>
+            <option value="pyramid">Pyramid</option>
+            <option value="hexagon">Hexagon</option>
+        </select>
+    </label>
+    <label>Spin: <input type="checkbox" id="spinControl"></label>
+
+    <canvas id="glCanvas" width="500" height="500"></canvas>
+
+    <script>
+        const canvas = document.getElementById("glCanvas");
+        const gl = canvas.getContext("webgl");
+        if (!gl) {
+            alert("WebGL not supported!");
+        }
+
+        let shape = "cube";
+        let rotateX = 0, rotateY = 0;
+        let size = 0.2;
+        let spinning = false;
+
+        function updateControls() {
+            rotateX = parseFloat(document.getElementById("rotateX").value);
+            rotateY = parseFloat(document.getElementById("rotateY").value);
+            size = parseFloat(document.getElementById("sizeControl").value);
+            shape = document.getElementById("shapeControl").value;
+            spinning = document.getElementById("spinControl").checked;
+            drawShape();
+        }
+
+        document.querySelectorAll("input, select").forEach(input => {
+            input.addEventListener("input", updateControls);
+        });
+
+        function getShapeVertices(shape, size) {
+            if (shape === "cube") {
+                return new Float32Array([
+                    -size, -size, -size, size, -size, -size, size, size, -size, -size, size, -size,  
+                    -size, -size, size, size, -size, size, size, size, size, -size, size, size
+                ]);
+            } else if (shape === "pyramid") {
+                return new Float32Array([
+                    0, size, 0, -size, -size, -size, size, -size, -size,  
+                    0, size, 0, size, -size, -size, size, -size, size,  
+                    0, size, 0, -size, -size, size, size, -size, size
+                ]);
+            } else if (shape === "hexagon") {
+                return new Float32Array([
+                    0, size, 0, size * 0.85, size * 0.5, -size * 0.85, size * 0.5,  
+                    size * 0.85, -size * 0.5, -size * 0.85, -size * 0.5
+                ]);
+            }
+            return new Float32Array([]);
+        }
+
+        function drawShape() {
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.enable(gl.DEPTH_TEST);
+
+            const vertices = getShapeVertices(shape, size);
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+            const vertexShaderCode = `
+                attribute vec3 position;
+                uniform mat4 transform;
+                void main() {
+                    gl_Position = transform * vec4(position, 1.0);
+                }
+            `;
+            const fragmentShaderCode = `
+                void main() {
+                    gl_FragColor = vec4(0.5, 1.0, 0.5, 1.0);
+                }
+            `;
+
+            function compileShader(type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                return shader;
+            }
+
+            const vertexShader = compileShader(gl.VERTEX_SHADER, vertexShaderCode);
+            const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentShaderCode);
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            gl.useProgram(program);
+
+            const positionLocation = gl.getAttribLocation(program, "position");
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+
+            const transformLocation = gl.getUniformLocation(program, "transform");
+
+            function getTransformationMatrix() {
+                const radX = rotateX * Math.PI / 180;
+                const radY = rotateY * Math.PI / 180;
+                if (spinning) {
+                    rotateY += 1;
+                }
+                return new Float32Array([
+                    Math.cos(radY), -Math.sin(radX), 0, 0,
+                    Math.sin(radY), Math.cos(radX), 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1
+                ]);
+            }
+
+            gl.uniformMatrix4fv(transformLocation, false, getTransformationMatrix());
+            gl.drawArrays(gl.TRIANGLE_FAN, 0, vertices.length / 3);
+
+            if (spinning) {
+                requestAnimationFrame(drawShape);
+            }
+        }
+
+        drawShape();
+    </script>
+</body>
+</html>
